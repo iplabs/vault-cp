@@ -32,7 +32,7 @@ function copy_recursive() {
 	done
 }
 
-copy_recursive $@
+copy_recursive "$@"
 
 if [[ -f "${tmpfile}" ]]; then
 	rm -f "${tmpfile}" || echo "Unable to delete tmpfile (${tmpfile}). Manual clean up necessary."
