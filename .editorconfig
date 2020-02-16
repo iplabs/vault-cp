@@ -1,0 +1,12 @@
+root = true
+
+[*]
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+tab_width = 8
+
+[*.sh]
+end_of_line = lf
+indent_style = tab
+indent_size = 8
