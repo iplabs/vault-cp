@@ -1,39 +1,23 @@
-#!/bin/bash
+export VAULT_SKIP_VERIFY=true
+vault_addr_source=https://vaultyyyyyyy:8200
+vault_token_source=yyyyyyyyyyy
 
-tmpfile=$(mktemp /tmp/vault-json-data.XXXXXXXXXX) || { echo "Failed to create temp file"; exit 1; }
+vault_addr_target=https://vaultxxxxxxx:8200
+vault_token_target=xxxxxxxxxxxx
 
-FOLDER_RE='^.*/$'
+vault_ns_source=yyyyyyyy
+vault_ns_target=xxxxxxxx
 
-VAULT_SOURCE_ADDR="${VAULT_SOURCE_ADDR:-${VAULT_ADDR:-""}}"
-VAULT_TARGET_ADDR="${VAULT_TARGET_ADDR:-${VAULT_ADDR:-""}}"
+kv_list=$(VAULT_ADDR=$vault_addr_source VAULT_TOKEN=$vault_token_source vault secrets list -namespace=$vault_ns_source | grep kv | cut -d " " -f 1)
 
-# Arguments:
-# $1: source_store
-# $2: target_store
-# $3: path
-function copy_recursive() {
-	local source_store="${1}"
-	local target_store="${2}"
-	local source_base_path="${source_store}${3}"
-	local target_base_path="${target_store}${3}"
-
-	local entries=($(vault kv list -format=json "${source_base_path}" | jq -r '.[]'))
-	for entry in "${entries[@]}"; do
-		local source_full_path="${source_base_path}${entry}"
-		echo -n "Processing entry ${source_full_path} ... "
-		if [[ "${entry}" =~ ${FOLDER_RE} ]]; then
-			copy_recursive "${1}" "${2}" "${3}${entry}"
-		else
-			local target_full_path="${target_base_path}${entry}"
-			echo "${source_store}${source_full_path} -> ${target_store}${source_full_path}"
-			VAULT_ADDR="${VAULT_SOURCE_ADDR}" vault kv get -format=json "${source_full_path}" | jq -r '.data.data' > "${tmpfile}"
-			VAULT_ADDR="${VAULT_TARGET_ADDR}" vault kv put "${target_full_path}" @"${tmpfile}"
-		fi
-	done
-}
-
-copy_recursive "$@"
-
-if [[ -f "${tmpfile}" ]]; then
-	rm -f "${tmpfile}" || echo "Unable to delete tmpfile (${tmpfile}). Manual clean up necessary."
-fi
+for kv_eng in $kv_list
+do
+    secret_path_list=$(VAULT_ADDR=$vault_addr_source VAULT_TOKEN=$vault_token_source vault kv list -namespace=$vault_ns_source $kv_eng | tail -n +3)
+    VAULT_ADDR=$vault_addr_target VAULT_TOKEN=$vault_token_target VAULT_NAMESPACE=$vault_ns_target vault secrets enable -path=$kv_eng kv-v2
+    for sec_path in $secret_path_list
+    do
+        VAULT_ADDR=$vault_addr_source VAULT_TOKEN=$vault_token_source vault kv get -format=json -namespace=$vault_ns_source $kv_eng$sec_path | jq -r '.data.data' > tmp
+        VAULT_ADDR=$vault_addr_target VAULT_TOKEN=$vault_token_target vault kv put -namespace=$vault_ns_target $kv_eng$sec_path @tmp
+    done
+done
+rm tmp
